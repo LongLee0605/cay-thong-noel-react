@@ -12,6 +12,10 @@ export default defineConfig({
       output: {
         manualChunks: undefined,
       },
+      external: (id) => {
+        // Không external MediaPipe, nhưng đảm bảo nó được xử lý đúng
+        return false;
+      },
     },
     commonjsOptions: {
       include: [/node_modules/],
@@ -28,6 +32,9 @@ export default defineConfig({
   },
   resolve: {
     preserveSymlinks: true,
+  },
+  ssr: {
+    noExternal: ['@mediapipe/hands', '@mediapipe/camera_utils'],
   },
 });
 

@@ -595,11 +595,36 @@ function MagicChristmas({ started, onStart }) {
 
     try {
       // Dynamic import để tránh lỗi khi build production
-      const { Hands } = await import('@mediapipe/hands');
-      const { Camera } = await import('@mediapipe/camera_utils');
+      // Import toàn bộ module để đảm bảo code được thực thi
+      const handsModule = await import('@mediapipe/hands');
+      const cameraModule = await import('@mediapipe/camera_utils');
+      
+      // MediaPipe Hands export Hands class qua named export
+      // Kiểm tra tất cả các cách có thể
+      const Hands = 
+        handsModule.Hands || 
+        (handsModule.default && (handsModule.default.Hands || handsModule.default)) ||
+        (typeof window !== 'undefined' && window.Hands);
+      
+      const Camera = 
+        cameraModule.Camera || 
+        (cameraModule.default && (cameraModule.default.Camera || cameraModule.default)) ||
+        (typeof window !== 'undefined' && window.Camera);
 
       if (!Hands || typeof Hands !== 'function') {
-        throw new Error('Hands is not a constructor. Check MediaPipe import.');
+        // Log để debug
+        console.error('Hands module structure:', {
+          hasHands: !!handsModule.Hands,
+          hasDefault: !!handsModule.default,
+          defaultType: typeof handsModule.default,
+          keys: Object.keys(handsModule),
+          windowHands: typeof window !== 'undefined' ? typeof window.Hands : 'N/A'
+        });
+        throw new Error('Hands is not a constructor. Module exports: ' + Object.keys(handsModule).join(', '));
+      }
+      
+      if (!Camera || typeof Camera !== 'function') {
+        throw new Error('Camera is not a constructor');
       }
 
       handsRef.current = new Hands({
