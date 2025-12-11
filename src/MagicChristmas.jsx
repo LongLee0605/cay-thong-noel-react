@@ -16,13 +16,6 @@ const CONFIG = {
   treeBaseRadius: 35,
 };
 
-const STATE_LABELS = {
-  TREE: { text: '✊ Thu Cây Thông', color: '#FFD700' },
-  EXPLODE: { text: '🖐 Bung Quà & Ảnh', color: '#FFA500' },
-  PHOTO: { text: '👌 Xem Ảnh', color: '#00FFFF' },
-  HEART: { text: '🫶 Love', color: '#FF69B4' },
-};
-
 function createCustomTexture(type) {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
@@ -86,9 +79,6 @@ function MagicChristmas({ started, onStart }) {
   const handXRef = useRef(0.5);
   const selectedIndexRef = useRef(0);
 
-  const [status, setStatus] = useState(STATE_LABELS.TREE);
-  const [hasError, setHasError] = useState('');
-
   const textures = useMemo(
     () => ({
       gold: createCustomTexture('gold_glow'),
@@ -110,39 +100,24 @@ function MagicChristmas({ started, onStart }) {
     try {
       musicRef.current = new Audio(MUSIC_URL);
       musicRef.current.loop = true;
-      musicRef.current.volume = 1;
+      musicRef.current.volume = 1.0;
       musicRef.current.play().catch(() => null);
 
       init3D();
       setupHands();
-      
-      // Debounced resize handler for better performance
-      let resizeTimeout;
+
       const onResize = () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          resizeRenderer();
-        }, 100);
+        if (cameraRef.current && rendererRef.current) {
+          cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+          cameraRef.current.updateProjectionMatrix();
+          rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+        }
       };
-      
+
       window.addEventListener('resize', onResize);
-      window.addEventListener('orientationchange', onResize);
-      cleanupFns.push(() => {
-        window.removeEventListener('resize', onResize);
-        window.removeEventListener('orientationchange', onResize);
-        clearTimeout(resizeTimeout);
-      });
-      
-      // ResizeObserver for container changes (mobile keyboard, etc.)
-      const resizeObserver = new ResizeObserver(() => {
-        resizeRenderer();
-      });
-      if (containerRef.current) {
-        resizeObserver.observe(containerRef.current);
-      }
-      cleanupFns.push(() => resizeObserver.disconnect());
+      cleanupFns.push(() => window.removeEventListener('resize', onResize));
     } catch (err) {
-      setHasError((prev) => `${prev}\n${err?.message ?? err}`);
+      console.error('Error initializing:', err);
     }
 
     return () => {
@@ -159,21 +134,6 @@ function MagicChristmas({ started, onStart }) {
     };
   }, [started, photoTextures, textures]);
 
-  const resizeRenderer = () => {
-    const camera = cameraRef.current;
-    const renderer = rendererRef.current;
-    const container = containerRef.current;
-    if (!camera || !renderer || !container) return;
-
-    const width = container.clientWidth || window.innerWidth;
-    const height = container.clientHeight || window.innerHeight;
-
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  };
-
   const stopAnimation = () => {
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -185,7 +145,6 @@ function MagicChristmas({ started, onStart }) {
     const renderer = rendererRef.current;
     if (renderer) {
       renderer.dispose();
-      renderer.forceContextLoss?.();
       rendererRef.current = null;
     }
     [groupGoldRef, groupRedRef, groupGiftRef].forEach((ref) => {
@@ -195,7 +154,10 @@ function MagicChristmas({ started, onStart }) {
         ref.current = null;
       }
     });
-    photoMeshesRef.current.forEach((mesh) => mesh.geometry?.dispose());
+    photoMeshesRef.current.forEach((mesh) => {
+      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) mesh.material.dispose();
+    });
     photoMeshesRef.current = [];
     sceneRef.current = null;
     cameraRef.current = null;
@@ -210,6 +172,7 @@ function MagicChristmas({ started, onStart }) {
     const phases = [];
 
     for (let i = 0; i < count; i += 1) {
+      // TREE
       const h = Math.random() * CONFIG.treeHeight;
       const y = h - CONFIG.treeHeight / 2;
       const radiusRatio = type === 'gold' ? Math.sqrt(Math.random()) : 0.9 + Math.random() * 0.1;
@@ -218,11 +181,12 @@ function MagicChristmas({ started, onStart }) {
       const theta = Math.random() * Math.PI * 2;
       pTreeTargets.push(r * Math.cos(theta), y, r * Math.sin(theta));
 
+      // EXPLODE
       const u = Math.random();
       const v = Math.random();
       const phi = Math.acos(2 * v - 1);
       const lam = 2 * Math.PI * u;
-      const radMult = type === 'gift' ? 1.2 : 1;
+      const radMult = type === 'gift' ? 1.2 : 1.0;
       const rad = CONFIG.explodeRadius * Math.cbrt(Math.random()) * radMult;
       pExplodeTargets.push(
         rad * Math.sin(phi) * Math.cos(lam),
@@ -230,6 +194,7 @@ function MagicChristmas({ started, onStart }) {
         rad * Math.cos(phi),
       );
 
+      // SOFT HEART
       const tHeart = Math.random() * Math.PI * 2;
       let hx = 16 * Math.pow(Math.sin(tHeart), 3);
       let hy =
@@ -237,17 +202,21 @@ function MagicChristmas({ started, onStart }) {
         5 * Math.cos(2 * tHeart) -
         2 * Math.cos(3 * tHeart) -
         Math.cos(4 * tHeart);
+
       const rFill = Math.pow(Math.random(), 0.3);
       hx *= rFill;
       hy *= rFill;
       let hz = (Math.random() - 0.5) * 8 * rFill;
-      const noise = 1;
+
+      const noise = 1.0;
       hx += (Math.random() - 0.5) * noise;
       hy += (Math.random() - 0.5) * noise;
       hz += (Math.random() - 0.5) * noise;
+
       const scaleH = 2.2;
       pHeartTargets.push(hx * scaleH, hy * scaleH + 5, hz);
 
+      // INIT
       pPositions.push(pTreeTargets[i * 3], pTreeTargets[i * 3 + 1], pTreeTargets[i * 3 + 2]);
       sizes.push(size);
       phases.push(Math.random() * Math.PI * 2);
@@ -283,7 +252,7 @@ function MagicChristmas({ started, onStart }) {
       size,
       map: textures[type],
       transparent: true,
-      opacity: 1,
+      opacity: 1.0,
       vertexColors: true,
       blending: type === 'gift' ? THREE.NormalBlending : THREE.AdditiveBlending,
       depthWrite: false,
@@ -299,9 +268,8 @@ function MagicChristmas({ started, onStart }) {
     const geo = new THREE.PlaneGeometry(8, 8);
     const borderGeo = new THREE.PlaneGeometry(9, 9);
     const borderMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
-    const meshes = [];
 
-    for (let i = 0; i < photoTextures.length; i += 1) {
+    for (let i = 0; i < 5; i += 1) {
       const mat = new THREE.MeshBasicMaterial({ map: photoTextures[i], side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
       const border = new THREE.Mesh(borderGeo, borderMat);
@@ -310,12 +278,12 @@ function MagicChristmas({ started, onStart }) {
       mesh.visible = false;
       mesh.scale.set(0, 0, 0);
       sceneRef.current.add(mesh);
-      meshes.push(mesh);
+      photoMeshesRef.current.push(mesh);
     }
-    photoMeshesRef.current = meshes;
   };
 
   const createDecorations = () => {
+    // MERRY CHRISTMAS
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 256;
@@ -332,11 +300,11 @@ function MagicChristmas({ started, onStart }) {
       transparent: true,
       blending: THREE.AdditiveBlending,
     });
-    const titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(60, 15), mat);
-    titleMesh.position.set(0, 50, 0);
-    sceneRef.current.add(titleMesh);
-    titleMeshRef.current = titleMesh;
+    titleMeshRef.current = new THREE.Mesh(new THREE.PlaneGeometry(60, 15), mat);
+    titleMeshRef.current.position.set(0, 50, 0);
+    sceneRef.current.add(titleMeshRef.current);
 
+    // STAR
     const starCanvas = document.createElement('canvas');
     starCanvas.width = 128;
     starCanvas.height = 128;
@@ -367,11 +335,11 @@ function MagicChristmas({ started, onStart }) {
       transparent: true,
       blending: THREE.AdditiveBlending,
     });
-    const starMesh = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), starMat);
-    starMesh.position.set(0, CONFIG.treeHeight / 2 + 2, 0);
-    sceneRef.current.add(starMesh);
-    starMeshRef.current = starMesh;
+    starMeshRef.current = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), starMat);
+    starMeshRef.current.position.set(0, CONFIG.treeHeight / 2 + 2, 0);
+    sceneRef.current.add(starMeshRef.current);
 
+    // I LOVE YOU TEXT
     const loveCanvas = document.createElement('canvas');
     loveCanvas.width = 1024;
     loveCanvas.height = 256;
@@ -388,11 +356,10 @@ function MagicChristmas({ started, onStart }) {
       transparent: true,
       blending: THREE.AdditiveBlending,
     });
-    const loveMesh = new THREE.Mesh(new THREE.PlaneGeometry(70, 18), loveMat);
-    loveMesh.position.set(0, 0, 20);
-    loveMesh.visible = false;
-    sceneRef.current.add(loveMesh);
-    loveMeshRef.current = loveMesh;
+    loveMeshRef.current = new THREE.Mesh(new THREE.PlaneGeometry(70, 18), loveMat);
+    loveMeshRef.current.position.set(0, 0, 20);
+    loveMeshRef.current.visible = false;
+    sceneRef.current.add(loveMeshRef.current);
   };
 
   const updateParticleGroup = (group, type, targetState, speed, handRotY, time) => {
@@ -412,11 +379,13 @@ function MagicChristmas({ started, onStart }) {
     group.geometry.attributes.position.needsUpdate = true;
 
     const count = positions.length / 3;
+
     if (targetState === 'TREE') {
       group.rotation.y += 0.003;
+
       for (let i = 0; i < count; i += 1) {
         sizes[i] = baseSize;
-        let brightness = 1;
+        let brightness = 1.0;
         if (type === 'red') {
           brightness = 0.5 + 0.5 * Math.sin(time * 3 + phases[i]);
         } else if (type === 'gold') {
@@ -426,22 +395,30 @@ function MagicChristmas({ started, onStart }) {
         colors[i * 3 + 1] = baseColor.g * brightness;
         colors[i * 3 + 2] = baseColor.b * brightness;
       }
+      group.geometry.attributes.color.needsUpdate = true;
+      group.geometry.attributes.size.needsUpdate = true;
     } else if (targetState === 'HEART') {
       group.rotation.y = 0;
       const beatScale = 1 + Math.abs(Math.sin(time * 3)) * 0.15;
       group.scale.set(beatScale, beatScale, beatScale);
+
       for (let i = 0; i < count; i += 1) {
         colors[i * 3] = baseColor.r;
         colors[i * 3 + 1] = baseColor.g;
         colors[i * 3 + 2] = baseColor.b;
-        sizes[i] = i % 3 === 0 ? baseSize : 0;
+        if (i % 3 === 0) sizes[i] = baseSize;
+        else sizes[i] = 0;
       }
+      group.geometry.attributes.color.needsUpdate = true;
+      group.geometry.attributes.size.needsUpdate = true;
     } else {
+      // EXPLODE
       group.scale.set(1, 1, 1);
       group.rotation.y += (handRotY - group.rotation.y) * 0.1;
+
       for (let i = 0; i < count; i += 1) {
         sizes[i] = baseSize;
-        let brightness = 1;
+        let brightness = 1.0;
         if (type === 'gold' || type === 'red') {
           brightness = 0.8 + 0.5 * Math.sin(time * 12 + phases[i]);
         }
@@ -449,15 +426,16 @@ function MagicChristmas({ started, onStart }) {
         colors[i * 3 + 1] = baseColor.g * brightness;
         colors[i * 3 + 2] = baseColor.b * brightness;
       }
+      group.geometry.attributes.size.needsUpdate = true;
+      group.geometry.attributes.color.needsUpdate = true;
     }
-    group.geometry.attributes.color.needsUpdate = true;
-    group.geometry.attributes.size.needsUpdate = true;
   };
 
-  const runAnimation = () => {
+  const animate = () => {
+    animationRef.current = requestAnimationFrame(animate);
     const time = Date.now() * 0.001;
     const speed = 0.08;
-    const handRotY = (handXRef.current - 0.5) * 4;
+    const handRotY = (handXRef.current - 0.5) * 4.0;
     const state = stateRef.current;
 
     updateParticleGroup(groupGoldRef.current, 'gold', state, speed, handRotY, time);
@@ -512,7 +490,7 @@ function MagicChristmas({ started, onStart }) {
           bestIdx = i;
         }
         if (z > 5) {
-          const ds = 1 + (z / CONFIG.photoOrbitRadius) * 0.8;
+          const ds = 1.0 + (z / CONFIG.photoOrbitRadius) * 0.8;
           mesh.scale.lerp(new THREE.Vector3(ds, ds, ds), 0.1);
         } else {
           mesh.scale.lerp(new THREE.Vector3(0.6, 0.6, 0.6), 0.1);
@@ -532,9 +510,7 @@ function MagicChristmas({ started, onStart }) {
         }
       });
     }
-
     rendererRef.current.render(sceneRef.current, cameraRef.current);
-    animationRef.current = requestAnimationFrame(runAnimation);
   };
 
   const init3D = () => {
@@ -555,13 +531,13 @@ function MagicChristmas({ started, onStart }) {
     rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(rendererRef.current.domElement);
 
-    groupGoldRef.current = createParticleSystem('gold', CONFIG.goldCount, 2);
+    groupGoldRef.current = createParticleSystem('gold', CONFIG.goldCount, 2.0);
     groupRedRef.current = createParticleSystem('red', CONFIG.redCount, 3.5);
-    groupGiftRef.current = createParticleSystem('gift', CONFIG.giftCount, 3);
+    groupGiftRef.current = createParticleSystem('gift', CONFIG.giftCount, 3.0);
 
     createPhotos();
     createDecorations();
-    runAnimation();
+    animate();
   };
 
   const setupHands = () => {
@@ -583,13 +559,14 @@ function MagicChristmas({ started, onStart }) {
       ctx.clearRect(0, 0, 100, 75);
       ctx.drawImage(results.image, 0, 0, 100, 75);
 
+      // Hand Logic
       if (results.multiHandLandmarks.length === 2) {
         const h1 = results.multiHandLandmarks[0];
         const h2 = results.multiHandLandmarks[1];
         const distIndex = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
         const distThumb = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
         if (distIndex < 0.15 && distThumb < 0.15) {
-          updateState('HEART');
+          stateRef.current = 'HEART';
           return;
         }
       }
@@ -605,15 +582,16 @@ function MagicChristmas({ started, onStart }) {
         });
         const avgDist = openDist / 4;
         const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+
         if (avgDist < 0.25) {
-          updateState('TREE');
+          stateRef.current = 'TREE';
         } else if (pinchDist < 0.05) {
-          updateState('PHOTO');
+          stateRef.current = 'PHOTO';
         } else {
-          updateState('EXPLODE');
+          stateRef.current = 'EXPLODE';
         }
       } else {
-        updateState('TREE');
+        stateRef.current = 'TREE';
       }
     });
 
@@ -627,25 +605,11 @@ function MagicChristmas({ started, onStart }) {
     cameraUtilsRef.current.start();
   };
 
-  const updateState = (nextState) => {
-    if (stateRef.current === nextState) return;
-    stateRef.current = nextState;
-    setStatus(STATE_LABELS[nextState] || STATE_LABELS.TREE);
-  };
-
   return (
     <div className="scene-wrapper">
-      {hasError && <div className="error-log">{hasError}</div>}
-      <div className="ui-layer">
-        <div className="badge" style={{ color: status.color }}>
-          {status.text}
-        </div>
+      <div id="ui-layer" className="ui-layer">
         <div className="guide">
-          <span className="guide-item">🖐 <b>Open:</b> Explode</span>
-          <span className="guide-separator"> | </span>
-          <span className="guide-item">🫶 <b>Heart:</b> Love</span>
-          <span className="guide-separator"> | </span>
-          <span className="guide-item">✊ <b>Fist:</b> Tree</span>
+          🖐 <b>Open:</b> Explode &nbsp;|&nbsp; 🫶 <b>Heart:</b> Love &nbsp;|&nbsp; ✊ <b>Fist:</b> Tree
         </div>
         {!started && (
           <button type="button" onClick={onStart}>
@@ -654,14 +618,13 @@ function MagicChristmas({ started, onStart }) {
         )}
       </div>
 
+      <div className="copyright">© by vandiep</div>
+
       <div ref={containerRef} id="canvas-container" />
       <video ref={videoRef} className="input_video" style={{ display: 'none' }} />
       <canvas ref={previewCanvasRef} id="camera-preview" />
-      <div className="copyright">© by vandiep</div>
     </div>
   );
 }
 
 export default MagicChristmas;
-
-

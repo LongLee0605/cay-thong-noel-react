@@ -24,26 +24,6 @@ body {
   text-align: center;
   pointer-events: none;
   z-index: 100;
-  padding: 0 15px;
-  box-sizing: border-box;
-}
-
-.badge {
-  display: inline-block;
-  background: rgba(0, 0, 0, 0.7);
-  border: 2px solid #ffd700;
-  color: #ffd700;
-  padding: 10px 25px;
-  border-radius: 50px;
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
-  text-shadow: 0 0 10px #ffd700;
-  max-width: 90%;
-  word-wrap: break-word;
 }
 
 .guide {
@@ -51,21 +31,6 @@ body {
   font-size: 13px;
   margin-bottom: 20px;
   text-shadow: 0 2px 4px black;
-  padding: 0 10px;
-  line-height: 1.5;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-}
-
-.guide-item {
-  white-space: nowrap;
-}
-
-.guide-separator {
-  opacity: 0.5;
 }
 
 button {
@@ -143,11 +108,6 @@ button:active {
 
 /* Tablet styles */
 @media screen and (max-width: 1024px) and (min-width: 768px) {
-  .badge {
-    font-size: 16px;
-    padding: 8px 20px;
-  }
-
   .guide {
     font-size: 12px;
   }
@@ -171,32 +131,11 @@ button:active {
 @media screen and (max-width: 767px) {
   .ui-layer {
     bottom: 20px;
-    padding: 0 10px;
-  }
-
-  .badge {
-    font-size: 14px;
-    padding: 8px 16px;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
-    max-width: 95%;
   }
 
   .guide {
     font-size: 11px;
     margin-bottom: 15px;
-    padding: 0 5px;
-    line-height: 1.6;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .guide-separator {
-    display: none;
-  }
-
-  .guide-item {
-    display: block;
   }
 
   button {
@@ -231,12 +170,6 @@ button:active {
     bottom: 15px;
   }
 
-  .badge {
-    font-size: 12px;
-    padding: 6px 14px;
-    margin-bottom: 6px;
-  }
-
   .guide {
     font-size: 10px;
     margin-bottom: 12px;
@@ -267,12 +200,6 @@ button:active {
     bottom: 10px;
   }
 
-  .badge {
-    font-size: 12px;
-    padding: 5px 12px;
-    margin-bottom: 5px;
-  }
-
   .guide {
     font-size: 10px;
     margin-bottom: 8px;
@@ -299,11 +226,6 @@ button:active {
 
 /* Large screens */
 @media screen and (min-width: 1920px) {
-  .badge {
-    font-size: 20px;
-    padding: 12px 30px;
-  }
-
   .guide {
     font-size: 15px;
   }
