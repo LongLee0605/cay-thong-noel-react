@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { Hands } from '@mediapipe/hands';
+import { Camera } from '@mediapipe/camera_utils';
 
 const MUSIC_URL = '/audio.mp3';
 const PHOTO_FILES = ['/image1.jpeg', '/image2.jpeg', '/image3.jpeg', '/image4.jpeg', '/image5.jpeg'];
@@ -105,66 +107,50 @@ function MagicChristmas({ started, onStart }) {
     if (!started) return undefined;
 
     const cleanupFns = [];
-    let isMounted = true;
+    try {
+      musicRef.current = new Audio(MUSIC_URL);
+      musicRef.current.loop = true;
+      musicRef.current.volume = 1;
+      musicRef.current.play().catch(() => null);
 
-    const initialize = async () => {
-      try {
-        musicRef.current = new Audio(MUSIC_URL);
-        musicRef.current.loop = true;
-        musicRef.current.volume = 1;
-        musicRef.current.play().catch(() => null);
-
-        init3D();
-        await setupHands();
-        
-        if (!isMounted) return;
-
-        // Debounced resize handler for better performance
-        let resizeTimeout;
-        const onResize = () => {
-          clearTimeout(resizeTimeout);
-          resizeTimeout = setTimeout(() => {
-            resizeRenderer();
-          }, 100);
-        };
-        
-        window.addEventListener('resize', onResize);
-        window.addEventListener('orientationchange', onResize);
-        cleanupFns.push(() => {
-          window.removeEventListener('resize', onResize);
-          window.removeEventListener('orientationchange', onResize);
-          clearTimeout(resizeTimeout);
-        });
-        
-        // ResizeObserver for container changes (mobile keyboard, etc.)
-        const resizeObserver = new ResizeObserver(() => {
+      init3D();
+      setupHands();
+      
+      // Debounced resize handler for better performance
+      let resizeTimeout;
+      const onResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
           resizeRenderer();
-        });
-        if (containerRef.current) {
-          resizeObserver.observe(containerRef.current);
-        }
-        cleanupFns.push(() => resizeObserver.disconnect());
-      } catch (err) {
-        if (isMounted) {
-          setHasError((prev) => `${prev}\n${err?.message ?? err}`);
-        }
+        }, 100);
+      };
+      
+      window.addEventListener('resize', onResize);
+      window.addEventListener('orientationchange', onResize);
+      cleanupFns.push(() => {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('orientationchange', onResize);
+        clearTimeout(resizeTimeout);
+      });
+      
+      // ResizeObserver for container changes (mobile keyboard, etc.)
+      const resizeObserver = new ResizeObserver(() => {
+        resizeRenderer();
+      });
+      if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
       }
-    };
-
-    initialize();
+      cleanupFns.push(() => resizeObserver.disconnect());
+    } catch (err) {
+      setHasError((prev) => `${prev}\n${err?.message ?? err}`);
+    }
 
     return () => {
-      isMounted = false;
       cleanupFns.forEach((fn) => fn());
       stopAnimation();
       disposeScene();
-      if (handsRef.current) {
-        handsRef.current.close?.().catch(() => null);
-        handsRef.current = null;
-      }
       if (cameraUtilsRef.current) {
         cameraUtilsRef.current.stop();
-        cameraUtilsRef.current = null;
       }
       if (musicRef.current) {
         musicRef.current.pause();
@@ -578,132 +564,67 @@ function MagicChristmas({ started, onStart }) {
     runAnimation();
   };
 
-  const setupHands = async () => {
+  const setupHands = () => {
     const video = videoRef.current;
     const canvas = previewCanvasRef.current;
-    
-    if (!video || !canvas) {
-      console.warn('Video or canvas not available');
-      return;
-    }
-
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.warn('Canvas context not available');
-      return;
-    }
 
-    try {
-      // Dynamic import để tránh lỗi khi build production
-      // Import toàn bộ module để đảm bảo code được thực thi
-      const handsModule = await import('@mediapipe/hands');
-      const cameraModule = await import('@mediapipe/camera_utils');
-      
-      // MediaPipe Hands export Hands class qua named export
-      // Kiểm tra tất cả các cách có thể
-      const Hands = 
-        handsModule.Hands || 
-        (handsModule.default && (handsModule.default.Hands || handsModule.default)) ||
-        (typeof window !== 'undefined' && window.Hands);
-      
-      const Camera = 
-        cameraModule.Camera || 
-        (cameraModule.default && (cameraModule.default.Camera || cameraModule.default)) ||
-        (typeof window !== 'undefined' && window.Camera);
+    handsRef.current = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+    handsRef.current.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
 
-      if (!Hands || typeof Hands !== 'function') {
-        // Log để debug
-        console.error('Hands module structure:', {
-          hasHands: !!handsModule.Hands,
-          hasDefault: !!handsModule.default,
-          defaultType: typeof handsModule.default,
-          keys: Object.keys(handsModule),
-          windowHands: typeof window !== 'undefined' ? typeof window.Hands : 'N/A'
+    handsRef.current.onResults((results) => {
+      ctx.clearRect(0, 0, 100, 75);
+      ctx.drawImage(results.image, 0, 0, 100, 75);
+
+      if (results.multiHandLandmarks.length === 2) {
+        const h1 = results.multiHandLandmarks[0];
+        const h2 = results.multiHandLandmarks[1];
+        const distIndex = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
+        const distThumb = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
+        if (distIndex < 0.15 && distThumb < 0.15) {
+          updateState('HEART');
+          return;
+        }
+      }
+
+      if (results.multiHandLandmarks.length > 0) {
+        const lm = results.multiHandLandmarks[0];
+        handXRef.current = lm[9].x;
+        const tips = [8, 12, 16, 20];
+        const wrist = lm[0];
+        let openDist = 0;
+        tips.forEach((i) => {
+          openDist += Math.hypot(lm[i].x - wrist.x, lm[i].y - wrist.y);
         });
-        throw new Error('Hands is not a constructor. Module exports: ' + Object.keys(handsModule).join(', '));
-      }
-      
-      if (!Camera || typeof Camera !== 'function') {
-        throw new Error('Camera is not a constructor');
-      }
-
-      handsRef.current = new Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-      });
-      
-      await handsRef.current.initialize();
-      
-      handsRef.current.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      handsRef.current.onResults((results) => {
-        if (!ctx || !results) return;
-        
-        ctx.clearRect(0, 0, 100, 75);
-        ctx.drawImage(results.image, 0, 0, 100, 75);
-
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
-          const h1 = results.multiHandLandmarks[0];
-          const h2 = results.multiHandLandmarks[1];
-          if (h1 && h2 && h1[8] && h2[8] && h1[4] && h2[4]) {
-            const distIndex = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
-            const distThumb = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
-            if (distIndex < 0.15 && distThumb < 0.15) {
-              updateState('HEART');
-              return;
-            }
-          }
-        }
-
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-          const lm = results.multiHandLandmarks[0];
-          if (lm && lm[9] && lm[0] && lm[4] && lm[8]) {
-            handXRef.current = lm[9].x;
-            const tips = [8, 12, 16, 20];
-            const wrist = lm[0];
-            let openDist = 0;
-            tips.forEach((i) => {
-              if (lm[i]) {
-                openDist += Math.hypot(lm[i].x - wrist.x, lm[i].y - wrist.y);
-              }
-            });
-            const avgDist = openDist / 4;
-            const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-            if (avgDist < 0.25) {
-              updateState('TREE');
-            } else if (pinchDist < 0.05) {
-              updateState('PHOTO');
-            } else {
-              updateState('EXPLODE');
-            }
-          }
-        } else {
+        const avgDist = openDist / 4;
+        const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+        if (avgDist < 0.25) {
           updateState('TREE');
+        } else if (pinchDist < 0.05) {
+          updateState('PHOTO');
+        } else {
+          updateState('EXPLODE');
         }
-      });
+      } else {
+        updateState('TREE');
+      }
+    });
 
-      cameraUtilsRef.current = new Camera(video, {
-        onFrame: async () => {
-          if (handsRef.current && video) {
-            try {
-              await handsRef.current.send({ image: video });
-            } catch (err) {
-              console.warn('Error sending frame to MediaPipe:', err);
-            }
-          }
-        },
-        width: 320,
-        height: 240,
-      });
-      cameraUtilsRef.current.start();
-    } catch (error) {
-      console.error('Error setting up MediaPipe Hands:', error);
-      setHasError((prev) => `${prev}\nMediaPipe Hands setup failed: ${error?.message ?? error}`);
-    }
+    cameraUtilsRef.current = new Camera(video, {
+      onFrame: async () => {
+        await handsRef.current.send({ image: video });
+      },
+      width: 320,
+      height: 240,
+    });
+    cameraUtilsRef.current.start();
   };
 
   const updateState = (nextState) => {
