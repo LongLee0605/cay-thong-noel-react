@@ -1,3 +1,13 @@
+.app-container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 25%),
+    radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.06), transparent 20%),
+    linear-gradient(145deg, #0a0f1d 0%, #0f1c2e 35%, #0f0f0f 100%);
+  overflow: hidden;
+}
+
 #canvas-container {
   width: 100%;
   height: 100vh;
@@ -25,7 +35,7 @@
 button {
   pointer-events: auto;
   cursor: pointer;
-  background: linear-gradient(to bottom, #D32F2F, #8B0000);
+  background: linear-gradient(135deg, #d32f2f 0%, #8b0000 100%);
   color: #FFF;
   border: 2px solid #FFD700;
   padding: 15px 50px;
@@ -89,5 +99,108 @@ button {
 
 .input_video {
   display: none;
+}
+
+/* ==========================================
+   RESPONSIVE - MOBILE OPTIMIZATION
+   ========================================== */
+
+/* Mobile devices */
+@media (max-width: 768px) {
+  /* UI Layer */
+  #ui-layer {
+    bottom: 20px;
+    padding: 0 15px;
+  }
+
+  /* Guide text */
+  .guide {
+    font-size: 11px;
+    margin-bottom: 15px;
+    line-height: 1.4;
+  }
+
+  /* Button */
+  button {
+    padding: 12px 35px;
+    font-size: 14px;
+    border-radius: 25px;
+  }
+
+  /* Camera Preview - Smaller on mobile */
+  #camera-preview {
+    top: 10px;
+    right: 10px;
+    width: 80px;
+    height: 60px;
+    opacity: 0.5;
+  }
+
+  /* Copyright */
+  #copyright {
+    bottom: 5px;
+    right: 10px;
+    font-size: 10px;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  /* UI Layer */
+  #ui-layer {
+    bottom: 15px;
+    padding: 0 10px;
+  }
+
+  /* Guide text - Stack vertically */
+  .guide {
+    font-size: 10px;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  /* Button */
+  button {
+    padding: 10px 30px;
+    font-size: 13px;
+    border-width: 1.5px;
+  }
+
+  /* Camera Preview - Even smaller */
+  #camera-preview {
+    width: 70px;
+    height: 52px;
+    opacity: 0.4;
+  }
+
+  /* Copyright */
+  #copyright {
+    font-size: 9px;
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  #ui-layer {
+    bottom: 10px;
+  }
+
+  .guide {
+    font-size: 10px;
+    margin-bottom: 10px;
+  }
+
+  button {
+    padding: 8px 25px;
+    font-size: 12px;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  button {
+    min-height: 44px; /* Minimum touch target size */
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 

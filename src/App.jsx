@@ -7,30 +7,41 @@ function App() {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const [isStarted, setIsStarted] = useState(false)
+  const loaderRef = useRef(null)
 
   useEffect(() => {
     if (!isStarted) return
 
+    // Detect mobile device - tính toán động
+    const checkIsMobile = () => {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             window.innerWidth <= 768
+    }
+    const isMobile = checkIsMobile()
+
     // ==========================================
     // 1. RESOURCES CONFIG Vandiep
     // ==========================================
-    const MUSIC_URL = "/audio.mp3"
+    const MUSIC_URL = '/audio.mp3'
+    const RESOURCES = {
+      photos: [
+        'https://images.unsplash.com/photo-1543589077-47d81606c1bf?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1482516559238-0144a7d81e8f?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1464375117522-1311d6a5b81f?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1479150928156-423a69d91c78?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1512389098783-66b81f86e199?auto=format&fit=crop&w=800&q=80'
+      ]
+    }
+
     const bgMusic = new Audio(MUSIC_URL)
     bgMusic.loop = true
     bgMusic.volume = 1.0
 
-    const loader = new THREE.TextureLoader()
-    const photoFiles = [
-      '/image1.jpeg',
-      '/image2.jpeg',
-      '/image3.jpeg',
-      '/image4.jpeg',
-      '/image5.jpeg'
-    ]
-    const photoTextures = []
-    photoFiles.forEach((f, i) => {
-      photoTextures[i] = loader.load(f)
-    })
+    const loader = loaderRef.current ?? new THREE.TextureLoader()
+    loader.setCrossOrigin('anonymous')
+    loaderRef.current = loader
+
+    const photoTextures = RESOURCES.photos.map((file) => loader.load(file))
 
     function createCustomTexture(type) {
       const canvas = document.createElement('canvas')
@@ -74,17 +85,49 @@ function App() {
     }
 
     // ==========================================
-    // 2. SYSTEM CONFIG Vandiep
+    // 2. SYSTEM CONFIG Vandiep - Responsive
     // ==========================================
-    const CONFIG = {
-      goldCount: 2000,
-      redCount: 300,
-      giftCount: 150,
-      explodeRadius: 65,
-      photoOrbitRadius: 25,
-      treeHeight: 70,
-      treeBaseRadius: 35
+    const getConfig = () => {
+      const baseConfig = {
+        goldCount: 2000,
+        redCount: 300,
+        giftCount: 150,
+        explodeRadius: 65,
+        photoOrbitRadius: 25,
+        treeHeight: 70,
+        treeBaseRadius: 35,
+        titleSize: { width: 60, height: 15 },
+        titleFont: 'bold italic 90px "Times New Roman"',
+        loveSize: { width: 70, height: 18 },
+        loveFont: 'bold 120px "Segoe UI", sans-serif',
+        starSize: 12
+      }
+
+      if (isMobile) {
+        const scale = window.innerWidth <= 480 ? 0.6 : 0.75
+        return {
+          goldCount: Math.floor(2000 * scale),
+          redCount: Math.floor(300 * scale),
+          giftCount: Math.floor(150 * scale),
+          explodeRadius: 65 * scale,
+          photoOrbitRadius: 25 * scale,
+          treeHeight: 70 * scale,
+          treeBaseRadius: 35 * scale,
+          titleSize: { width: 60 * scale, height: 15 * scale },
+          titleFont: window.innerWidth <= 480 
+            ? 'bold italic 50px "Times New Roman"' 
+            : 'bold italic 65px "Times New Roman"',
+          loveSize: { width: 70 * scale, height: 18 * scale },
+          loveFont: window.innerWidth <= 480
+            ? 'bold 70px "Segoe UI", sans-serif'
+            : 'bold 90px "Segoe UI", sans-serif',
+          starSize: 12 * scale
+        }
+      }
+      return baseConfig
     }
+
+    const CONFIG = getConfig()
 
     let scene, camera, renderer
     let groupGold, groupRed, groupGift
@@ -103,12 +146,23 @@ function App() {
       scene = new THREE.Scene()
       scene.fog = new THREE.FogExp2(0x000000, 0.002)
 
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
+      // Responsive camera FOV
+      const fov = isMobile ? 70 : 60
+      camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000)
       camera.position.z = 100
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+      // Optimize renderer for mobile
+      const pixelRatio = isMobile 
+        ? Math.min(window.devicePixelRatio, 1.5) 
+        : Math.min(window.devicePixelRatio, 2)
+      
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: !isMobile, // Disable antialiasing on mobile for performance
+        alpha: false,
+        powerPreference: isMobile ? 'low-power' : 'high-performance'
+      })
       renderer.setSize(window.innerWidth, window.innerHeight)
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setPixelRatio(pixelRatio)
       container.appendChild(renderer.domElement)
 
       groupGold = createParticleSystem('gold', CONFIG.goldCount, 2.0)
@@ -223,8 +277,12 @@ function App() {
       const borderGeo = new THREE.PlaneGeometry(9, 9)
       const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 })
 
-      for (let i = 0; i < 5; i++) {
-        const mat = new THREE.MeshBasicMaterial({ map: photoTextures[i], side: THREE.DoubleSide })
+      RESOURCES.photos.forEach((_, i) => {
+        const mat = new THREE.MeshBasicMaterial({
+          map: photoTextures[i],
+          side: THREE.DoubleSide,
+          transparent: true
+        })
         const mesh = new THREE.Mesh(geo, mat)
         const border = new THREE.Mesh(borderGeo, borderMat)
         border.position.z = -0.1
@@ -233,25 +291,27 @@ function App() {
         mesh.scale.set(0, 0, 0)
         scene.add(mesh)
         photoMeshes.push(mesh)
-      }
+      })
     }
 
     function createDecorations() {
-      // MERRY CHRISTMAS Vandiep
+      // MERRY CHRISTMAS Vandiep - Responsive
       const canvas = document.createElement('canvas')
-      canvas.width = 1024
-      canvas.height = 256
+      const canvasWidth = isMobile ? 512 : 1024
+      const canvasHeight = isMobile ? 128 : 256
+      canvas.width = canvasWidth
+      canvas.height = canvasHeight
       const ctx = canvas.getContext('2d')
-      ctx.font = 'bold italic 90px "Times New Roman"'
+      ctx.font = CONFIG.titleFont
       ctx.fillStyle = '#FFD700'
       ctx.textAlign = 'center'
       ctx.shadowColor = "#FF0000"
-      ctx.shadowBlur = 40
-      ctx.fillText("MERRY CHRISTMAS", 512, 130)
+      ctx.shadowBlur = isMobile ? 20 : 40
+      ctx.fillText("MERRY CHRISTMAS", canvasWidth / 2, canvasHeight * 0.5)
       const tex = new THREE.CanvasTexture(canvas)
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending })
-      titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(60, 15), mat)
-      titleMesh.position.set(0, 50, 0)
+      titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.titleSize.width, CONFIG.titleSize.height), mat)
+      titleMesh.position.set(0, isMobile ? 40 : 50, 0)
       scene.add(titleMesh)
 
       // STAR Vandiep
@@ -278,24 +338,26 @@ function App() {
       sCtx.fill()
       const starTex = new THREE.CanvasTexture(starCanvas)
       const starMat = new THREE.MeshBasicMaterial({ map: starTex, transparent: true, blending: THREE.AdditiveBlending })
-      starMesh = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), starMat)
+      starMesh = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.starSize, CONFIG.starSize), starMat)
       starMesh.position.set(0, CONFIG.treeHeight / 2 + 2, 0)
       scene.add(starMesh)
 
-      // I LOVE YOU TEXT Vandiep
+      // I LOVE YOU TEXT Vandiep - Responsive
       const loveCanvas = document.createElement('canvas')
-      loveCanvas.width = 1024
-      loveCanvas.height = 256
+      const loveCanvasWidth = isMobile ? 512 : 1024
+      const loveCanvasHeight = isMobile ? 128 : 256
+      loveCanvas.width = loveCanvasWidth
+      loveCanvas.height = loveCanvasHeight
       const lCtx = loveCanvas.getContext('2d')
-      lCtx.font = 'bold 120px "Segoe UI", sans-serif'
+      lCtx.font = CONFIG.loveFont
       lCtx.fillStyle = '#FF69B4'
       lCtx.textAlign = 'center'
       lCtx.shadowColor = "#FF1493"
-      lCtx.shadowBlur = 40
-      lCtx.fillText("I LOVE YOU ❤️", 512, 130)
+      lCtx.shadowBlur = isMobile ? 20 : 40
+      lCtx.fillText("I LOVE YOU ❤️", loveCanvasWidth / 2, loveCanvasHeight * 0.5)
       const loveTex = new THREE.CanvasTexture(loveCanvas)
       const loveMat = new THREE.MeshBasicMaterial({ map: loveTex, transparent: true, blending: THREE.AdditiveBlending })
-      loveMesh = new THREE.Mesh(new THREE.PlaneGeometry(70, 18), loveMat)
+      loveMesh = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.loveSize.width, CONFIG.loveSize.height), loveMat)
       loveMesh.position.set(0, 0, 20)
       loveMesh.visible = false
       scene.add(loveMesh)
@@ -442,10 +504,12 @@ function App() {
         selectedIndex = bestIdx
       } else if (state === 'PHOTO') {
         loveMesh.visible = false
+        const photoScale = isMobile ? 3.5 : 5
+        const photoZ = isMobile ? 50 : 60
         photoMeshes.forEach((mesh, i) => {
           if (i === selectedIndex) {
-            mesh.position.lerp(new THREE.Vector3(0, 0, 60), 0.1)
-            mesh.scale.lerp(new THREE.Vector3(5, 5, 5), 0.1)
+            mesh.position.lerp(new THREE.Vector3(0, 0, photoZ), 0.1)
+            mesh.scale.lerp(new THREE.Vector3(photoScale, photoScale, photoScale), 0.1)
             mesh.lookAt(camera.position)
             mesh.rotation.z = 0
           } else {
@@ -463,8 +527,10 @@ function App() {
       const video = videoRef.current
       const canvas = canvasRef.current
       if (canvas) {
-        canvas.width = 100
-        canvas.height = 75
+        // Responsive canvas preview size
+        const previewScale = isMobile ? 0.6 : 1
+        canvas.width = 100 * previewScale
+        canvas.height = 75 * previewScale
       }
       const ctx = canvas?.getContext('2d')
 
@@ -544,12 +610,17 @@ function App() {
           }
         })
 
+        // Responsive camera settings for mobile
+        const cameraWidth = isMobile ? 240 : 320
+        const cameraHeight = isMobile ? 180 : 240
+        
         const cameraUtils = new Camera(video, {
           onFrame: async () => {
             await hands.send({ image: video })
           },
-          width: 320,
-          height: 240
+          width: cameraWidth,
+          height: cameraHeight,
+          facingMode: 'user' // Front camera for mobile
         })
         cameraUtils.start()
       }).catch(err => {
@@ -561,9 +632,18 @@ function App() {
 
     function handleResize() {
       if (camera && renderer) {
+        const newIsMobile = window.innerWidth <= 768
+        const fov = newIsMobile ? 70 : 60
+        camera.fov = fov
         camera.aspect = window.innerWidth / window.innerHeight
         camera.updateProjectionMatrix()
         renderer.setSize(window.innerWidth, window.innerHeight)
+        
+        // Update pixel ratio on resize
+        const pixelRatio = newIsMobile 
+          ? Math.min(window.devicePixelRatio, 1.5) 
+          : Math.min(window.devicePixelRatio, 2)
+        renderer.setPixelRatio(pixelRatio)
       }
     }
 
