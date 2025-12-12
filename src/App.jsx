@@ -8,8 +8,6 @@ function App() {
   const canvasRef = useRef(null)
   const [isStarted, setIsStarted] = useState(false)
   const loaderRef = useRef(null)
-  const audioCtxRef = useRef(null)
-  const melodyTimerRef = useRef(null)
 
   useEffect(() => {
     if (!isStarted) return
@@ -24,50 +22,10 @@ function App() {
     // ==========================================
     // 1. RESOURCES CONFIG Vandiep
     // ==========================================
-    const makeCardSvg = ({ title, message, colors }) => {
-      const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${colors[0]}" />
-      <stop offset="100%" stop-color="${colors[1]}" />
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="${colors[2]}" flood-opacity="0.45"/>
-    </filter>
-  </defs>
-  <rect width="800" height="800" rx="28" ry="28" fill="url(#bg)"/>
-  <g filter="url(#shadow)">
-    <circle cx="140" cy="150" r="34" fill="#f5f5f5" opacity="0.8"/>
-    <circle cx="180" cy="170" r="26" fill="#f5f5f5" opacity="0.65"/>
-    <circle cx="210" cy="145" r="22" fill="#f5f5f5" opacity="0.55"/>
-  </g>
-  <text x="50%" y="58%" text-anchor="middle" fill="#fff" font-family="Segoe UI, sans-serif" font-size="68" font-weight="700" letter-spacing="4">${title}</text>
-  <text x="50%" y="68%" text-anchor="middle" fill="#fcefb4" font-family="Segoe UI, sans-serif" font-size="38" font-weight="500">${message}</text>
-  <g transform="translate(400 300) scale(1.05)">
-    <polygon points="0,-160 32,-32 160,-32 54,36 86,164 0,88 -86,164 -54,36 -160,-32 -32,-32" fill="#ffd54f" stroke="#f5a623" stroke-width="10" />
-  </g>
-  <g transform="translate(400 480)">
-    <rect x="-110" y="-14" width="220" height="28" rx="14" fill="#b71c1c" />
-    <rect x="-14" y="-80" width="28" height="160" rx="14" fill="#b71c1c" />
-  </g>
-  <g transform="translate(400 200)">
-    <circle cx="-200" cy="120" r="12" fill="#fff" opacity="0.45"/>
-    <circle cx="230" cy="100" r="18" fill="#fff" opacity="0.5"/>
-    <circle cx="240" cy="140" r="10" fill="#fff" opacity="0.4"/>
-  </g>
-</svg>`
-      return `data:image/svg+xml,${encodeURIComponent(svg)}`
-    }
-
+    const MUSIC_URL = '/audio.mp3'
+    let bgMusic = null
     const RESOURCES = {
-      photos: [
-        makeCardSvg({ title: 'Merry Christmas', message: 'Warm wishes & joy', colors: ['#123048', '#0b1a2e', '#e63946'] }),
-        makeCardSvg({ title: 'Holiday Magic', message: 'Lights, love, laughter', colors: ['#1d2b64', '#1c3b5a', '#ffd166'] }),
-        makeCardSvg({ title: 'Peace & Love', message: 'From our home to yours', colors: ['#0f2027', '#203a43', '#2c5364'] }),
-        makeCardSvg({ title: 'Joyful Season', message: 'Snow & cocoa dreams', colors: ['#461220', '#8c2f39', '#ffd54f'] }),
-        makeCardSvg({ title: 'Winter Wishes', message: 'Glow in every heart', colors: ['#132743', '#1f4068', '#f25c54'] })
-      ]
+      photos: ['/image1.jpeg', '/image2.jpeg', '/image3.jpeg', '/image4.jpeg', '/image5.jpeg']
     }
 
     const loader = loaderRef.current ?? new THREE.TextureLoader()
@@ -75,49 +33,9 @@ function App() {
     loaderRef.current = loader
 
     const photoTextures = RESOURCES.photos.map((file) => loader.load(file))
-
-    // ------------------------------------------
-    // 1.a CREATE BACKGROUND MUSIC (WebAudio)
-    // ------------------------------------------
-    const startMelody = () => {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext
-      if (!AudioCtx) return null
-
-      const ctx = new AudioCtx()
-      audioCtxRef.current = ctx
-      const master = ctx.createGain()
-      master.gain.value = 0.18
-      master.connect(ctx.destination)
-
-      const scheduleChord = () => {
-        const now = ctx.currentTime
-        const notes = [523.25, 659.25, 783.99] // C5, E5, G5
-        notes.forEach((freq, i) => {
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.type = 'sine'
-          osc.frequency.value = freq
-          gain.gain.setValueAtTime(0.0001, now + i * 0.05)
-          gain.gain.exponentialRampToValueAtTime(1, now + 0.2 + i * 0.05)
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6 + i * 0.05)
-          osc.connect(gain)
-          gain.connect(master)
-          osc.start(now + i * 0.05)
-          osc.stop(now + 1.8 + i * 0.05)
-        })
-      }
-
-      scheduleChord()
-      melodyTimerRef.current = window.setInterval(scheduleChord, 3600)
-
-      return () => {
-        if (melodyTimerRef.current) {
-          clearInterval(melodyTimerRef.current)
-          melodyTimerRef.current = null
-        }
-        ctx.close()
-      }
-    }
+    bgMusic = new Audio(MUSIC_URL)
+    bgMusic.loop = true
+    bgMusic.volume = 0.9
 
     function createCustomTexture(type) {
       const canvas = document.createElement('canvas')
@@ -597,7 +515,8 @@ function App() {
     }
 
     function startSystem() {
-      const stopMelody = startMelody()
+      // Play background music (requires user interaction already occurred)
+      bgMusic.play().catch(() => {})
       init3D()
 
       const video = videoRef.current
@@ -743,15 +662,10 @@ function App() {
       if (renderer) {
         renderer.dispose()
       }
-      if (melodyTimerRef.current) {
-        clearInterval(melodyTimerRef.current)
-        melodyTimerRef.current = null
+      if (bgMusic) {
+        bgMusic.pause()
+        bgMusic = null
       }
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close()
-        audioCtxRef.current = null
-      }
-      if (stopMelody) stopMelody()
     }
   }, [isStarted])
 
